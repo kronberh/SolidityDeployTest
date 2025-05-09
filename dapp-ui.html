@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChangeValue</title>
+</head>
+<body>
+    <h1>Simple Storage: Products</h1>
+    <input id="name" placeholder="name" />
+    <input id="description" placeholder="description" />
+    <input id="imageUrl" placeholder="imageUrl" />
+    <button onClick="addProduct()">Add Product</button>
+    <br /><br />
+    <table id="products" border="1">
+        
+    </table>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+    <script>
+        const contractAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+        const abi = [
+            "function getProducts() public view returns (tuple(string name, string description, address creator, uint256 timestamp, string imageUrl)[])",
+            "function addProduct(string name, string description, string imageUrl) public"
+        ];
+
+
+        async function addProduct() {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+
+            const contract = new ethers.Contract(contractAddress, abi, signer);
+            const name = document.getElementById("name").value;
+            const description = document.getElementById("description").value;
+            const imageUrl = document.getElementById("imageUrl").value;
+            const tx = await contract.addProduct(name, description, imageUrl);
+
+            await tx.wait();
+            await getProducts();
+        }
+
+        async function getProducts() {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const contract = new ethers.Contract(contractAddress, abi, provider);
+
+            const products = await contract.getProducts();
+
+            let html = `
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Creator</th>
+                <th>Timestamp</th>
+                <th>Image</th>
+            </tr>`;
+            products.forEach(product => {
+                html += `
+                <tr>
+                    <td>${product.name}</td>
+                    <td>${product.description}</td>
+                    <td>${product.creator}</td>
+                    <td>${new Date(Number(product.timestamp) * 1000).toLocaleString()}</td>
+                    <td><img src="${product.imageUrl}" alt="${product.name}" style="height: 50px;" /></td>
+                </tr>`;
+            });
+            document.getElementById("products").innerHTML = html;
+        }
+        
+        getProducts();
+    </script>
+</body>
+</html>
