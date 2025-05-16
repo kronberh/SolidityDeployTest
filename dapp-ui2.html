@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poll Voting</title>
+</head>
+<body>
+    <h1>Poll Voting</h1>
+
+    <h2>Add New Poll</h2>
+    <input id="poll-subject" placeholder="Poll Subject" />
+    <input id="poll-options" placeholder="Options (comma separated)" />
+    <button onclick="addPoll()">Add Poll</button>
+
+    <hr />
+
+    <h2>All Polls</h2>
+    <table id="polls" border="1">
+        <tr>
+            <th>ID</th>
+            <th>Subject</th>
+            <th>Publisher</th>
+            <th>Options</th>
+        </tr>
+    </table>
+
+    <hr />
+
+    <h2>Vote on Poll</h2>
+    <input id="vote-poll-id" type="number" placeholder="Poll ID" />
+    <input id="vote-option-id" type="number" placeholder="Option ID" />
+    <button onclick="vote()">Vote</button>
+
+    <h2>Vote Counts</h2>
+    <input id="view-poll-id" type="number" placeholder="Poll ID to View Votes" />
+    <button onclick="viewVotes()">View Vote Counts</button>
+    <table id="votes" border="1">
+        <tr>
+            <th>Option ID</th>
+            <th>Text</th>
+            <th>Votes</th>
+        </tr>
+    </table>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+    <script>
+        const contractAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"; // Replace with your deployed address
+        const abi = [
+            "function addPoll(string subject, string[] options) public returns(uint)",
+            "function getPolls() public view returns (tuple(uint id, string subject, address publisher, tuple(uint id, string text)[] options)[])",
+            "function getVotes(uint pollId) public view returns (tuple(uint id, string text)[])",
+            "function vote(uint pollId, uint optionId) public"
+        ];
+
+        async function addPoll() {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+            const contract = new ethers.Contract(contractAddress, abi, signer);
+
+            const subject = document.getElementById("poll-subject").value;
+            const options = document.getElementById("poll-options").value.split(",").map(opt => opt.trim());
+
+            const tx = await contract.addPoll(subject, options);
+            await tx.wait();
+
+            await getPolls();
+        }
+
+        async function getPolls() {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const contract = new ethers.Contract(contractAddress, abi, provider);
+            const polls = await contract.getPolls();
+
+            let html = `
+                <tr>
+                    <th>ID</th>
+                    <th>Subject</th>
+                    <th>Publisher</th>
+                    <th>Options</th>
+                </tr>`;
+            polls.forEach(poll => {
+                const optionList = poll.options.map(opt => `<li>${opt.id}: ${opt.text}</li>`).join("");
+                html += `
+                    <tr>
+                        <td>${poll.id}</td>
+                        <td>${poll.subject}</td>
+                        <td>${poll.publisher}</td>
+                        <td><ul>${optionList}</ul></td>
+                    </tr>`;
+            });
+            document.getElementById("polls").innerHTML = html;
+        }
+
+        async function vote() {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+            const contract = new ethers.Contract(contractAddress, abi, signer);
+
+            const pollId = parseInt(document.getElementById("vote-poll-id").value);
+            const optionId = parseInt(document.getElementById("vote-option-id").value);
+
+            const tx = await contract.vote(pollId, optionId);
+            await tx.wait();
+
+            await viewVotes(); // refresh vote counts
+        }
+
+        async function viewVotes() {
+            const pollId = parseInt(document.getElementById("view-poll-id").value);
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const contract = new ethers.Contract(contractAddress, abi, provider);
+
+            const votes = await contract.getVotes(pollId);
+
+            // Count votes per option
+            const voteCounts = {};
+            votes.forEach(vote => {
+                voteCounts[vote.id] = (voteCounts[vote.id] || { text: vote.text, count: 0 });
+                voteCounts[vote.id].count++;
+            });
+
+            let html = `
+                <tr>
+                    <th>Option ID</th>
+                    <th>Text</th>
+                    <th>Votes</th>
+                </tr>`;
+            for (const id in voteCounts) {
+                html += `
+                    <tr>
+                        <td>${id}</td>
+                        <td>${voteCounts[id].text}</td>
+                        <td>${voteCounts[id].count}</td>
+                    </tr>`;
+            }
+
+            document.getElementById("votes").innerHTML = html;
+        }
+
+        getPolls();
+    </script>
+</body>
+</html>
